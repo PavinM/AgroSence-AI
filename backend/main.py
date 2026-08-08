@@ -8,6 +8,8 @@ import onnxruntime as ort
 from PIL import Image
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 
 # ------------------------------------------------
@@ -230,8 +232,17 @@ def analyze_image(image_bytes):
 # Health endpoint
 # ------------------------------------------------
 
+frontend_dist = os.path.join(PROJECT_DIR, "frontend", "dist")
+
+if os.path.exists(os.path.join(frontend_dist, "assets")):
+    app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dist, "assets")), name="assets")
+
+
 @app.api_route("/", methods=["GET", "HEAD"])
-def root():
+async def root():
+    index_path = os.path.join(frontend_dist, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
     return {
         "service": "AgroSense AI",
         "status": "online"
@@ -466,6 +477,25 @@ def predict_soil_health(data: SoilPredictionInput):
             status_code=500,
             detail=f"Soil health prediction failed: {str(e)}"
         )
+
+
+@app.get("/{full_path:path}")
+async def serve_frontend(full_path: str):
+    if full_path.startswith("api"):
+        raise HTTPException(status_code=404, detail=f"API endpoint '/{full_path}' not found")
+    
+    file_path = os.path.join(frontend_dist, full_path)
+    if os.path.exists(file_path) and os.path.isfile(file_path):
+        return FileResponse(file_path)
+    
+    index_path = os.path.join(frontend_dist, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    
+    return {
+        "service": "AgroSense AI",
+        "status": "online"
+    }
 
 
 if __name__ == "__main__":
