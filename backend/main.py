@@ -230,7 +230,7 @@ def analyze_image(image_bytes):
 # Health endpoint
 # ------------------------------------------------
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 def root():
     return {
         "service": "AgroSense AI",
@@ -238,7 +238,7 @@ def root():
     }
 
 
-@app.get("/api/health")
+@app.api_route("/api/health", methods=["GET", "HEAD"])
 def health():
     return {
         "status": "online",
