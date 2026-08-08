@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+ai/venv/
+venv/
+env/
+.venv/
+
+# Large Datasets & Archives
+*.zip
+*.tar.gz
+DataSets/Image Dataset for Turmeric Plant Leaf Disease Dete/
+
+# Python cache & compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Build outputs
+dist/
+build/
+*.egg-info/
+
+# Environment & local settings
+.env
+.env.local
+.env.*.local
+
+# IDE & OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log

@@ -1,0 +1,14 @@
+{
+    "crop": "Turmeric",
+    "classes": [
+        "Aphids_Disease",
+        "Blotch",
+        "Healthy_Leaf",
+        "Leaf_Spot"
+    ],
+    "image_size": [
+        224,
+        224
+    ],
+    "model": "MobileNetV2"
+}
