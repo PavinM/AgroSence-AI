@@ -1,72 +1,42 @@
 /**
  * AgroSense AI - Sensor Service
- * Mock service providing real-time & historical soil health telemetry data.
- * Architecture Note: Replace function implementations with real REST/WebSocket endpoints when backend/ESP32 is connected.
+ * Physical hardware: ESP32 Dev Board + Soil Moisture Sensor + DHT11
+ *
+ * Sensors available:
+ *   - Soil Moisture Sensor -> moisture
+ *   - DHT11                -> temperature, humidity
  */
 
-// Initial baseline soil data for turmeric (Curcuma longa)
-const initialSensorState = {
-  moisture: {
-    value: 64.5,
-    unit: '%',
-    minOptimal: 60,
-    maxOptimal: 80,
-    minVal: 0,
-    maxVal: 100,
-    label: 'Soil Moisture',
-    status: 'Optimal',
-    description: 'Optimal moisture for root development and rhizome growth.',
-    lastUpdated: 'Just now'
-  },
-  ph: {
-    value: 6.2,
-    unit: 'pH',
-    minOptimal: 5.5,
-    maxOptimal: 6.8,
-    minVal: 0,
-    maxVal: 14,
-    label: 'Soil pH Level',
-    status: 'Optimal',
-    description: 'Slightly acidic to neutral soil, ideal for turmeric nutrient absorption.',
-    lastUpdated: 'Just now'
-  },
-  nitrogen: {
-    value: 128,
-    unit: 'mg/kg',
-    minOptimal: 100,
-    maxOptimal: 150,
-    minVal: 0,
-    maxVal: 300,
-    label: 'Nitrogen (N)',
-    status: 'Optimal',
-    description: 'Promotes healthy green foliage and leaf area index.',
-    lastUpdated: 'Just now'
-  },
-  phosphorus: {
-    value: 52,
-    unit: 'mg/kg',
-    minOptimal: 40,
-    maxOptimal: 70,
-    minVal: 0,
-    maxVal: 150,
-    label: 'Phosphorus (P)',
-    status: 'Optimal',
-    description: 'Essential for vigorous root growth and tuber yield.',
-    lastUpdated: 'Just now'
-  },
-  potassium: {
-    value: 165,
-    unit: 'mg/kg',
-    minOptimal: 120,
-    maxOptimal: 180,
-    minVal: 0,
-    maxVal: 300,
-    label: 'Potassium (K)',
-    status: 'Optimal',
-    description: 'Crucial for curcumin synthesis and disease resistance.',
-    lastUpdated: 'Just now'
+const API_BASE_URL = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  ? (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000')
+  : (import.meta.env.VITE_API_BASE_URL || '');
+
+async function request(path, options) {
+  const response = await fetch(`${API_BASE_URL}${path}`, options);
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Server returned ${response.status}`);
   }
-};
+  return response.json();
+}
+
+export async function getLatestSensorReading() {
+  const data = await request('/api/sensors/latest');
+  return data.reading || null;
+}
+
+export async function getSensorHistory(limit = 100) {
+  const data = await request(`/api/sensors/history?limit=${encodeURIComponent(limit)}`);
+  return data.readings || [];
+}
+
+export async function sendSensorReading(data) {
+  return request('/api/sensors/readings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+}
 
 /**
  * Helper to compute status based on value and thresholds
@@ -78,67 +48,128 @@ export function getSensorStatus(value, minOpt, maxOpt) {
 }
 
 /**
- * Fetch current real-time sensor metrics
+ * Fetch current real-time sensor metrics.
+ * Connects to MongoDB Atlas via FastAPI GET /api/sensors/latest with fallback.
  */
 export async function getRealtimeSensors() {
-  // Simulate network latency (50ms)
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve({ ...initialSensorState });
-    }, 50);
-  });
-}
+  try {
+    const latest = await getLatestSensorReading();
+    if (latest && latest.soil_moisture !== undefined) {
+      const timeStr = latest.timestamp
+        ? new Date(latest.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+        : 'Just now';
 
-/**
- * Generate time-series historical data for Recharts (24h, 7d, 30d)
- */
-export function getHistoricalSensorData(timeframe = '24h') {
-  const points = timeframe === '24h' ? 12 : timeframe === '7d' ? 14 : 30;
-  const now = new Date();
-  const data = [];
-
-  for (let i = points - 1; i >= 0; i--) {
-    let timestampLabel = '';
-    if (timeframe === '24h') {
-      const past = new Date(now.getTime() - i * 2 * 60 * 60 * 1000);
-      timestampLabel = past.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } else if (timeframe === '7d') {
-      const past = new Date(now.getTime() - i * 12 * 60 * 60 * 1000);
-      timestampLabel = past.toLocaleDateString([], { weekday: 'short', hour: '2-digit' });
-    } else {
-      const past = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-      timestampLabel = past.toLocaleDateString([], { month: 'short', day: 'numeric' });
+      return {
+        moisture: {
+          value: Number(latest.soil_moisture),
+          unit: '%',
+          minOptimal: 60,
+          maxOptimal: 80,
+          minVal: 0,
+          maxVal: 100,
+          label: 'Soil Moisture',
+          status: getSensorStatus(Number(latest.soil_moisture), 60, 80),
+          description: 'Optimal moisture for root development and rhizome growth.',
+          lastUpdated: timeStr,
+          deviceId: latest.device_id || 'ESP32_001'
+        },
+        temperature: {
+          value: Number(latest.temperature),
+          unit: '°C',
+          minOptimal: 20,
+          maxOptimal: 35,
+          minVal: 0,
+          maxVal: 60,
+          label: 'Ambient Temperature',
+          status: getSensorStatus(Number(latest.temperature), 20, 35),
+          description: 'Ambient temperature read from DHT11. Turmeric grows best at 20-35°C.',
+          lastUpdated: timeStr,
+          deviceId: latest.device_id || 'ESP32_001'
+        },
+        humidity: {
+          value: Number(latest.humidity),
+          unit: '%',
+          minOptimal: 60,
+          maxOptimal: 85,
+          minVal: 0,
+          maxVal: 100,
+          label: 'Humidity',
+          status: getSensorStatus(Number(latest.humidity), 60, 85),
+          description: 'Relative humidity from DHT11. High humidity supports turmeric growth.',
+          lastUpdated: timeStr,
+          deviceId: latest.device_id || 'ESP32_001'
+        }
+      };
     }
-
-    // Realistic fluctuations around turmeric baseline
-    const moisture = +(64 + Math.sin(i * 0.5) * 6 + (Math.random() * 2 - 1)).toFixed(1);
-    const ph = +(6.2 + Math.cos(i * 0.4) * 0.3 + (Math.random() * 0.1 - 0.05)).toFixed(2);
-    const nitrogen = Math.round(128 + Math.sin(i * 0.3) * 12 + (Math.random() * 4 - 2));
-    const phosphorus = Math.round(52 + Math.cos(i * 0.5) * 6 + (Math.random() * 2 - 1));
-    const potassium = Math.round(165 + Math.sin(i * 0.2) * 15 + (Math.random() * 5 - 2.5));
-
-    data.push({
-      timestamp: timestampLabel,
-      moisture,
-      ph,
-      nitrogen,
-      phosphorus,
-      potassium
-    });
+  } catch (err) {
+    console.warn('[SensorService] Live reading fetch error:', err.message);
   }
 
-  return data;
+  return null;
 }
 
 /**
- * System hardware & service connection telemetry
+ * System hardware & service connection telemetry including MongoDB Atlas node.
  */
 export async function getSystemStatus() {
+  let isMongoConnected = false;
+  let isBackendOnline = false;
+  let isPlantAiOnline = false;
+  let isSoilAiOnline = false;
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/health`);
+    if (res.ok) {
+      const healthData = await res.json();
+      isBackendOnline = healthData.backend === 'healthy' || healthData.status === 'online';
+      isMongoConnected = Boolean(healthData.mongodb);
+      isPlantAiOnline = Boolean(healthData.plant_ai_model);
+      isSoilAiOnline = Boolean(healthData.soil_ai_model);
+    }
+  } catch {
+    // Backend is offline
+  }
+
   return {
-    esp32: { name: 'ESP32 Gateway Node', status: 'Connected', signal: '-62 dBm', ip: '192.168.1.104', uptime: '14 days' },
-    moistureSensor: { name: 'Soil Moisture Capacitive v1.2', status: 'Online', battery: '98%', pin: 'GPIO 34' },
-    soilPropertySensor: { name: 'Soil NPK & pH RS485 Probe', status: 'Online', bus: 'Modbus RTU', pin: 'GPIO 16/17' },
-    aiService: { name: 'Turmeric AI Inference Engine', status: 'Online', model: 'ResNet-50 v2.1', latency: '42ms' },
-    backendApi: { name: 'AgroSense REST & WS API', status: 'Online', environment: 'Production', rate: '100% OK' }
+    esp32: {
+      name: 'ESP32 Dev Board',
+      status: isBackendOnline ? 'Connected' : 'Unavailable',
+      signal: '-62 dBm',
+      ip: '192.168.1.104',
+      uptime: '14 days'
+    },
+    moistureSensor: {
+      name: 'Soil Moisture Sensor',
+      status: isBackendOnline ? 'Online' : 'Unavailable',
+      pin: 'GPIO 34'
+    },
+    dht11: {
+      name: 'DHT11 Temperature & Humidity',
+      status: isBackendOnline ? 'Online' : 'Unavailable',
+      pin: 'GPIO 4'
+    },
+    aiService: {
+      name: 'Turmeric ONNX Disease Model',
+      status: isPlantAiOnline ? 'Connected' : 'Unavailable',
+      model: 'turmeric_model.onnx',
+      latency: '42ms'
+    },
+    soilAiService: {
+      name: 'Soil Health Random Forest Model',
+      status: isSoilAiOnline ? 'Connected' : 'Unavailable',
+      model: 'soil_model_3features.pkl'
+    },
+    mongodb: {
+      name: 'MongoDB Atlas Database',
+      status: isMongoConnected ? 'Connected' : 'Unavailable',
+      database: 'agrosence_ai',
+      collections: 'sensor_readings, soil_predictions, plant_analyses'
+    },
+    backendApi: {
+      name: 'AgroSense FastAPI Backend',
+      status: isBackendOnline ? 'Connected' : 'Unavailable',
+      environment: 'Production',
+      rate: '100% OK'
+    }
   };
 }

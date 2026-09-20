@@ -1,5 +1,5 @@
 import React from 'react';
-import { Lightbulb, Droplets, ShieldAlert, Zap, CheckCircle2, ArrowRight } from 'lucide-react';
+import { Lightbulb, Droplets, ShieldAlert, CheckCircle2, ArrowRight } from 'lucide-react';
 
 export default function SmartRecommendations({ sensors, latestScan, soilPrediction, onNavigate }) {
   // Generate intelligent recommendations by fusing soil sensors and visual AI diagnosis
@@ -21,8 +21,8 @@ export default function SmartRecommendations({ sensors, latestScan, soilPredicti
   }
 
   // Soil moisture recommendation
-  const moistureVal = sensors?.moisture?.value || 64.5;
-  if (moistureVal < 60) {
+  const moistureVal = sensors?.moisture?.value;
+  if (moistureVal != null && moistureVal < 60) {
     recommendations.push({
       id: 'rec-moisture-low',
       type: 'Irrigation',
@@ -32,7 +32,7 @@ export default function SmartRecommendations({ sensors, latestScan, soilPredicti
       description: `Soil moisture (${moistureVal}%) is below the recommended 60-80% threshold for turmeric rhizomes. Irrigation is recommended.`,
       actionText: 'Trigger Irrigation System'
     });
-  } else if (moistureVal > 80) {
+  } else if (moistureVal != null && moistureVal > 80) {
     recommendations.push({
       id: 'rec-moisture-high',
       type: 'Drainage',
@@ -42,7 +42,7 @@ export default function SmartRecommendations({ sensors, latestScan, soilPredicti
       description: `Soil moisture (${moistureVal}%) exceeds optimal range. Ensure field drainage channels are clear to prevent rhizome root rot (Pythium species).`,
       actionText: 'Inspect Field Channels'
     });
-  } else {
+  } else if (moistureVal != null) {
     recommendations.push({
       id: 'rec-moisture-optimal',
       type: 'Irrigation',
@@ -68,30 +68,6 @@ export default function SmartRecommendations({ sensors, latestScan, soilPredicti
     });
   }
 
-  // NPK Soil Nutrients recommendation
-  const nitrogenVal = sensors?.nitrogen?.value || 128;
-  if (nitrogenVal < 100) {
-    recommendations.push({
-      id: 'rec-nitrogen',
-      type: 'Fertilization',
-      icon: Zap,
-      iconColor: 'text-amber-500 bg-amber-100 dark:bg-amber-950',
-      title: 'Nitrogen Deficiency Notice',
-      description: `Soil Nitrogen level (${nitrogenVal} mg/kg) is low. Apply organic compost or urea top-dressing to support green leaf canopy development.`,
-      actionText: 'View NPK Calculator'
-    });
-  } else {
-    recommendations.push({
-      id: 'rec-npk-balanced',
-      type: 'Nutrition',
-      icon: Zap,
-      iconColor: 'text-teal-500 bg-teal-100 dark:bg-teal-950',
-      title: 'NPK Nutrient Profile Balanced',
-      description: `Soil Nitrogen (128 mg/kg), Phosphorus (52 mg/kg), and Potassium (165 mg/kg) are in ideal proportion for maximum curcumin yield.`,
-      actionText: 'Soil Details'
-    });
-  }
-
   return (
     <section className="mb-8">
       <div className="flex items-center justify-between mb-4">
@@ -107,7 +83,9 @@ export default function SmartRecommendations({ sensors, latestScan, soilPredicti
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {recommendations.map((rec) => {
+        {recommendations.length === 0 ? (
+          <p className="md:col-span-3 py-8 text-center text-sm text-slate-500 dark:text-slate-400">Waiting for sensor or analysis data.</p>
+        ) : recommendations.map((rec) => {
           const Icon = rec.icon;
           return (
             <div key={rec.id} className="glass-card glass-card-hover p-5 rounded-2xl flex flex-col justify-between">

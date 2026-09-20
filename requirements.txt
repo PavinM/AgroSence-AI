@@ -8,3 +8,5 @@ pandas
 scikit-learn
 pydantic
 python-multipart
+pymongo
+dnspython

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Header from './components/Header';
 import Navigation from './components/Navigation';
 import FarmOverview from './components/FarmOverview';
@@ -16,19 +16,13 @@ import {
   getSystemStatus 
 } from './services/sensorService';
 
-import { 
-  INITIAL_RECENT_ANALYSES, 
-  TURMERIC_DISEASE_CLASSES, 
-  DISEASE_PROFILES,
+import { getSoilHealthHistory } from './services/soilHealthService';
+import { getPlantAnalysisHistory } from './services/plantHistoryService';
+
+import {
   BLOTCH_TURMERIC_LEAF_SVG,
   GENERIC_TURMERIC_LEAF_SVG
 } from './services/plantAiService';
-
-import {
-  INITIAL_SOIL_PREDICTION,
-  INITIAL_SOIL_HISTORY,
-  predictSoilHealth
-} from './services/soilHealthService';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -36,67 +30,21 @@ export default function App() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState('Just now');
 
-  // Soil Telemetry State
+  // Soil Telemetry State (Current readings from ESP32 / MongoDB)
   const [sensors, setSensors] = useState(null);
   
-  // System Telemetry State
+  // System Telemetry State (Nodes + MongoDB Atlas status)
   const [telemetry, setTelemetry] = useState(null);
 
-  // Plant Scan History State
-  const [scanHistory, setScanHistory] = useState(INITIAL_RECENT_ANALYSES);
+  const [scanHistory, setScanHistory] = useState([]);
 
-  // Soil Health AI Prediction State & History
-  const [soilPrediction, setSoilPrediction] = useState(INITIAL_SOIL_PREDICTION);
-  const [soilHistory, setSoilHistory] = useState(INITIAL_SOIL_HISTORY);
+  const [soilPrediction, setSoilPrediction] = useState(null);
+  const [soilHistory, setSoilHistory] = useState([]);
+  const [historyError, setHistoryError] = useState('');
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
 
   // Latest Plant Scan state for Farm Overview & Recommendations
-  const blotchClass =
-    TURMERIC_DISEASE_CLASSES?.BLOTCH ||
-    TURMERIC_DISEASE_CLASSES?.Blotch ||
-    (Array.isArray(TURMERIC_DISEASE_CLASSES)
-      ? TURMERIC_DISEASE_CLASSES.find(
-          (name) => String(name).toLowerCase() === 'blotch'
-        )
-      : null) ||
-    'Blotch';
-
-  const blotchProfile =
-    DISEASE_PROFILES?.[blotchClass] ||
-    DISEASE_PROFILES?.Blotch ||
-    DISEASE_PROFILES?.BLOTCH ||
-    {
-      symptoms: [
-        'Blotched or discolored regions on the leaf',
-        'Affected areas may expand over time'
-      ],
-      recommendedAction: [
-        'Inspect nearby turmeric plants for similar symptoms',
-        'Remove severely affected foliage when appropriate',
-        'Seek crop-specific disease management guidance if symptoms spread'
-      ]
-    };
-
-  const defaultBlotchScan = {
-    id: 'scan-109',
-    timestamp: 'Just now',
-    crop: 'Turmeric (Curcuma longa)',
-    diseaseDetected: blotchClass,
-    diseasePredicted: blotchClass,
-    prediction: blotchClass,
-    disease: blotchClass,
-    confidence: 81.66,
-    condition: 'Unhealthy',
-    severity: 'High',
-    symptoms: blotchProfile.symptoms || [],
-    recommendedAction:
-      blotchProfile.recommendedAction ||
-      blotchProfile.recommended_action ||
-      [],
-    thumbnail: BLOTCH_TURMERIC_LEAF_SVG,
-    image: BLOTCH_TURMERIC_LEAF_SVG
-  };
-
-  const [latestScan, setLatestScan] = useState(defaultBlotchScan);
+  const [latestScan, setLatestScan] = useState(null);
 
   // Toggle Dark Mode class on <html>
   useEffect(() => {
@@ -107,53 +55,92 @@ export default function App() {
     }
   }, [darkMode]);
 
-  // Load initial sensor & system data
-  const refreshData = async () => {
-    setIsRefreshing(true);
+  // Fetch persistent history from MongoDB Atlas
+  const fetchDbHistories = useCallback(async () => {
+    setIsHistoryLoading(true);
+    setHistoryError('');
+    try {
+      const [persistedSoil, persistedPlants] = await Promise.all([
+        getSoilHealthHistory(50),
+        getPlantAnalysisHistory(20)
+      ]);
+
+      setSoilHistory(persistedSoil);
+      setScanHistory(persistedPlants);
+      if (persistedPlants.length > 0) {
+        const top = persistedPlants[0];
+        setLatestScan({
+          ...top,
+          diseaseDetected: top.disease || top.prediction,
+          diseasePredicted: top.disease || top.prediction,
+          thumbnail: top.condition === 'Healthy' ? GENERIC_TURMERIC_LEAF_SVG : BLOTCH_TURMERIC_LEAF_SVG
+        });
+      } else {
+        setLatestScan(null);
+      }
+    } catch (err) {
+      console.warn('[App] Error loading MongoDB persistent histories:', err);
+      setHistoryError('Unable to load history data.');
+    } finally {
+      setIsHistoryLoading(false);
+    }
+  }, []);
+
+  // Poll current live sensors (every 10s as required)
+  const pollLiveSensors = useCallback(async () => {
     const data = await getRealtimeSensors();
     const system = await getSystemStatus();
     setSensors(data);
     setTelemetry(system);
     setLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-    setTimeout(() => setIsRefreshing(false), 500);
+  }, []);
+
+  // Full manual refresh
+  const refreshData = async () => {
+    setIsRefreshing(true);
+    await Promise.all([pollLiveSensors(), fetchDbHistories()]);
+    setIsRefreshing(false);
   };
 
+  // Setup periodic polling: 10s for sensors, 30s for history
   useEffect(() => {
     refreshData();
 
-    // Periodic sensor telemetry pulse simulation (every 15 seconds)
-    const interval = setInterval(() => {
-      refreshData();
-    }, 15000);
+    // 10s interval for current sensor readings
+    const sensorInterval = setInterval(() => {
+      pollLiveSensors();
+    }, 10000);
 
-    return () => clearInterval(interval);
-  }, []);
+    // 30s interval for database history
+    const historyInterval = setInterval(() => {
+      fetchDbHistories();
+    }, 30000);
+
+    return () => {
+      clearInterval(sensorInterval);
+      clearInterval(historyInterval);
+    };
+  }, [pollLiveSensors, fetchDbHistories]);
 
   // When user completes a new AI plant scan
   const handleNewAnalysis = (newResult) => {
     const scanItem = {
       ...newResult,
-      diseasePredicted: newResult.diseaseDetected,
+      diseasePredicted: newResult.diseaseDetected || newResult.disease,
       thumbnail: newResult.imagePreview || BLOTCH_TURMERIC_LEAF_SVG
     };
     
     setLatestScan(scanItem);
     setScanHistory((prev) => [scanItem, ...prev]);
+
+    // Re-fetch persistent records from MongoDB Atlas
+    fetchDbHistories();
   };
 
   // When user completes a new Soil Health prediction
   const handleSoilPredictionUpdate = (newPrediction) => {
     setSoilPrediction(newPrediction);
-    const historyRecord = {
-      id: `soil-pred-${Date.now().toString().slice(-4)}`,
-      timestamp: newPrediction.timestamp || 'Just now',
-      health_status: newPrediction.health_status,
-      confidence: newPrediction.confidence,
-      probabilities: newPrediction.probabilities,
-      recommendation: newPrediction.recommendation,
-      inputs: newPrediction.inputs
-    };
-    setSoilHistory((prev) => [historyRecord, ...prev]);
+    fetchDbHistories();
   };
 
   return (
@@ -176,49 +163,70 @@ export default function App() {
         
         {/* TAB 1: Main Dashboard View (All Sections Integrated) */}
         {activeTab === 'dashboard' && (
-          <div>
+          <div className="space-y-8">
             <FarmOverview 
               sensors={sensors} 
               latestScan={latestScan} 
               soilPrediction={soilPrediction}
               onNavigate={setActiveTab} 
             />
+            <SoilMonitoring sensors={sensors} onRefreshSensors={pollLiveSensors} />
+            <SensorCharts />
             <SoilHealthPrediction 
               currentPrediction={soilPrediction}
+              sensors={sensors}
               onPredictionUpdate={handleSoilPredictionUpdate}
             />
-            <SoilMonitoring sensors={sensors} />
-            <SensorCharts />
+            <SoilHealthHistory 
+              historyList={soilHistory} 
+              onRefresh={fetchDbHistories}
+              isLoading={isHistoryLoading}
+              error={historyError}
+            />
             <PlantAiAnalysis onAnalysisComplete={handleNewAnalysis} />
+            <RecentAnalyses 
+              scanHistory={scanHistory} 
+              onRefresh={fetchDbHistories}
+              isLoading={isHistoryLoading}
+              error={historyError}
+            />
             <SmartRecommendations 
               sensors={sensors} 
               latestScan={latestScan} 
               soilPrediction={soilPrediction}
               onNavigate={setActiveTab} 
             />
-            <RecentAnalyses scanHistory={scanHistory} />
             <SystemStatus telemetry={telemetry} />
           </div>
         )}
 
         {/* TAB 2: Dedicated Plant AI Analysis Focus */}
         {activeTab === 'plant-analysis' && (
-          <div>
+          <div className="space-y-8">
             <PlantAiAnalysis onAnalysisComplete={handleNewAnalysis} />
-            <RecentAnalyses scanHistory={scanHistory} />
+            <RecentAnalyses 
+              scanHistory={scanHistory} 
+              onRefresh={fetchDbHistories}
+              isLoading={isHistoryLoading}
+              error={historyError}
+            />
           </div>
         )}
 
         {/* TAB 3: Dedicated Soil Health Monitoring & AI Model Focus */}
         {activeTab === 'soil-monitoring' && (
-          <div>
+          <div className="space-y-8">
+            <SoilMonitoring sensors={sensors} onRefreshSensors={pollLiveSensors} />
+            <SensorCharts />
             <SoilHealthPrediction 
               currentPrediction={soilPrediction}
+              sensors={sensors}
               onPredictionUpdate={handleSoilPredictionUpdate}
             />
-            <SoilHealthHistory historyList={soilHistory} />
-            <SoilMonitoring sensors={sensors} />
-            <SensorCharts />
+            <SoilHealthHistory 
+              historyList={soilHistory} 
+              onRefresh={fetchDbHistories} 
+            />
             <SmartRecommendations 
               sensors={sensors} 
               latestScan={latestScan} 
@@ -229,9 +237,15 @@ export default function App() {
 
         {/* TAB 4: Dedicated Scan History (Plant & Soil) */}
         {activeTab === 'history' && (
-          <div className="space-y-6">
-            <SoilHealthHistory historyList={soilHistory} />
-            <RecentAnalyses scanHistory={scanHistory} />
+          <div className="space-y-8">
+            <SoilHealthHistory 
+              historyList={soilHistory} 
+              onRefresh={fetchDbHistories} 
+            />
+            <RecentAnalyses 
+              scanHistory={scanHistory} 
+              onRefresh={fetchDbHistories} 
+            />
           </div>
         )}
 

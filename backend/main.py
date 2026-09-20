@@ -55,6 +55,28 @@ app.add_middleware(
 )
 
 
+# ------------------------------------------------
+# Database Connection (MongoDB Atlas)
+# ------------------------------------------------
+
+try:
+    from backend import database as db
+except ImportError:
+    import database as db
+
+@app.on_event("startup")
+async def startup_db():
+    """Attempt initial MongoDB Atlas index creation on startup if reachable."""
+    try:
+        if db.is_mongodb_connected():
+            db.init_db_indexes()
+            print("[AgroSense AI] Connected to MongoDB Atlas persistent storage.")
+        else:
+            print("[AgroSense AI] MongoDB Atlas not yet connected or offline. Running with fallback buffer.")
+    except Exception as e:
+        print(f"[AgroSense AI] MongoDB startup notice: {e}")
+
+
 MODEL_DIR = os.path.join(
     PROJECT_DIR,
     "ai",
@@ -251,9 +273,18 @@ async def root():
 
 @app.api_route("/api/health", methods=["GET", "HEAD"])
 def health():
+    is_mongo_ok = db.is_mongodb_connected()
+    plant_model_ok = (session is not None)
+    model, encoder, _ = get_soil_model()
+    soil_model_ok = (model is not None and encoder is not None)
     return {
+        "backend": "healthy",
+        "plant_ai_model": plant_model_ok,
+        "soil_ai_model": soil_model_ok,
+        "mongodb": is_mongo_ok,
+        # Legacy compatibility fields
         "status": "online",
-        "ai_model": "loaded",
+        "ai_model": "loaded" if plant_model_ok else "unloaded",
         "crop": "Turmeric",
         "classes": class_names
     }
@@ -284,6 +315,22 @@ async def plant_analysis(
 
         result = analyze_image(image_bytes)
 
+        # Save to MongoDB Atlas plant_analyses collection
+        try:
+            db.save_plant_analysis(
+                crop=result.get("crop", "Turmeric"),
+                prediction=result.get("prediction", "Unknown"),
+                disease=result.get("disease", "Unknown"),
+                condition=result.get("condition", "Unknown"),
+                confidence=result.get("confidence", 0.0),
+                severity=result.get("severity", "Unknown"),
+                probabilities=result.get("probabilities", {}),
+                symptoms=result.get("symptoms", []),
+                recommended_action=result.get("recommended_action", [])
+            )
+        except Exception as db_err:
+            print(f"[MongoDB] Error saving plant analysis: {db_err}")
+
         return result
 
     except Exception as e:
@@ -294,39 +341,150 @@ async def plant_analysis(
         )
 
 
+@app.get("/api/plant/history")
+def get_plant_analyses_history(limit: int = 50):
+    """Fetch recent plant disease analyses from MongoDB Atlas."""
+    analyses = db.get_plant_history(limit=limit)
+    return {
+        "success": True,
+        "count": len(analyses),
+        "analyses": analyses
+    }
+
+
 # ------------------------------------------------
-# Soil Health Prediction endpoint
+# ESP32 Sensor Telemetry Endpoints & Models
 # ------------------------------------------------
 
+from typing import Optional
 from pydantic import BaseModel
 
-from pydantic import BaseModel
+class SensorReadingInput(BaseModel):
+    """ESP32 physical sensor reading payload."""
+    device_id: Optional[str] = "ESP32_001"
+    Soil_Moisture: Optional[float] = None
+    soil_moisture: Optional[float] = None
+    Ambient_Temperature: Optional[float] = None
+    temperature: Optional[float] = None
+    Humidity: Optional[float] = None
+    humidity: Optional[float] = None
+
+
+@app.post("/api/sensors/readings")
+def post_sensor_reading(data: SensorReadingInput):
+    """
+    Save real-time sensor readings from ESP32 Dev Board.
+    Captures: Soil_Moisture, Ambient_Temperature, Humidity.
+    """
+    moisture = data.Soil_Moisture if data.Soil_Moisture is not None else data.soil_moisture
+    temp = data.Ambient_Temperature if data.Ambient_Temperature is not None else data.temperature
+    hum = data.Humidity if data.Humidity is not None else data.humidity
+
+    if moisture is None or temp is None or hum is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Missing required sensor fields. Expected: Soil_Moisture, Ambient_Temperature, Humidity."
+        )
+
+    if not (0 <= moisture <= 100):
+        raise HTTPException(status_code=400, detail=f"Invalid soil moisture: {moisture}%. Must be between 0 and 100.")
+    if not (-20 <= temp <= 80):
+        raise HTTPException(status_code=400, detail=f"Invalid temperature: {temp}°C. Must be between -20 and 80.")
+    if not (0 <= hum <= 100):
+        raise HTTPException(status_code=400, detail=f"Invalid humidity: {hum}%. Must be between 0 and 100.")
+
+    device_id = data.device_id or "ESP32_001"
+    saved = db.save_sensor_reading(
+        soil_moisture=moisture,
+        temperature=temp,
+        humidity=hum,
+        device_id=device_id
+    )
+
+    return {
+        "success": True,
+        "message": "Sensor reading saved",
+        "data": {
+            "device_id": saved.get("device_id", device_id),
+            "Soil_Moisture": saved.get("soil_moisture", moisture),
+            "Ambient_Temperature": saved.get("temperature", temp),
+            "Humidity": saved.get("humidity", hum),
+            "timestamp": saved.get("timestamp")
+        }
+    }
+
+
+@app.get("/api/sensors/latest")
+def get_latest_sensor(device_id: Optional[str] = None):
+    """Fetch the newest sensor reading from MongoDB Atlas."""
+    reading = db.get_latest_sensor_reading(device_id=device_id)
+    if not reading:
+        raise HTTPException(
+            status_code=404,
+            detail="No sensor readings found. Make sure the ESP32 has sent at least one reading."
+        )
+    return {
+        "success": True,
+        "reading": {
+            "device_id": reading.get("device_id", "ESP32_001"),
+            "soil_moisture": reading.get("soil_moisture"),
+            "temperature": reading.get("temperature"),
+            "humidity": reading.get("humidity"),
+            "timestamp": reading.get("timestamp")
+        }
+    }
+
+
+@app.get("/api/sensors/history")
+def get_sensors_history(device_id: Optional[str] = None, limit: int = 100):
+    """
+    Fetch chronological historical sensor readings from MongoDB Atlas
+    for Recharts graphs and tabular analysis.
+    """
+    raw_readings = db.get_sensor_history(device_id=device_id, limit=limit)
+    formatted = []
+    for r in raw_readings:
+        formatted.append({
+            "device_id": r.get("device_id", "ESP32_001"),
+            "timestamp": r.get("timestamp"),
+            "soil_moisture": r.get("soil_moisture"),
+            "temperature": r.get("temperature"),
+            "humidity": r.get("humidity")
+        })
+    return {
+        "success": True,
+        "count": len(formatted),
+        "readings": formatted
+    }
+
+
+# ------------------------------------------------
+# Soil Health Prediction endpoint & Models
+# ------------------------------------------------
 
 class SoilPredictionInput(BaseModel):
+    """Physical sensor inputs from ESP32 + Soil Moisture Sensor + DHT11."""
+    device_id: Optional[str] = "ESP32_001"
     Soil_Moisture: float = 55.0
     Ambient_Temperature: float = 28.0
-    Soil_Temperature: float = 26.0
     Humidity: float = 60.0
-    Light_Intensity: float = 700.0
-    Soil_pH: float = 6.5
-    Nitrogen_Level: float = 40.0
-    Phosphorus_Level: float = 25.0
-    Potassium_Level: float = 35.0
-    Chlorophyll_Content: float = 45.0
-    Electrochemical_Signal: float = 1.2
 
 
 SOIL_MODEL_DIR = os.path.join(PROJECT_DIR, "ai", "soil_health", "models")
-soil_model_path = os.path.join(SOIL_MODEL_DIR, "soil_model.pkl")
+soil_model_path = os.path.join(SOIL_MODEL_DIR, "soil_model_3features.pkl")
 label_encoder_path = os.path.join(SOIL_MODEL_DIR, "label_encoder.pkl")
 feature_names_path = os.path.join(SOIL_MODEL_DIR, "feature_names.pkl")
+accuracy_path = os.path.join(SOIL_MODEL_DIR, "model_accuracy.pkl")
 
 soil_model = None
 soil_label_encoder = None
 soil_feature_names = None
+soil_model_accuracy = None
+
+PHYSICAL_FEATURES = ["Soil_Moisture", "Ambient_Temperature", "Humidity"]
 
 def get_soil_model():
-    global soil_model, soil_label_encoder, soil_feature_names
+    global soil_model, soil_label_encoder, soil_feature_names, soil_model_accuracy
     if soil_model is None:
         try:
             import joblib
@@ -335,9 +493,13 @@ def get_soil_model():
                 soil_model = joblib.load(soil_model_path)
                 soil_label_encoder = joblib.load(label_encoder_path)
                 soil_feature_names = joblib.load(feature_names_path)
-                print("Soil model and encoder loaded successfully.")
+                if os.path.exists(accuracy_path):
+                    soil_model_accuracy = joblib.load(accuracy_path)
+                print("3-feature soil model loaded successfully.")
+            else:
+                print(f"Soil model not found at: {soil_model_path}")
         except Exception as e:
-            print(f"Soil model load info: {e}")
+            print(f"Soil model load error: {e}")
     return soil_model, soil_label_encoder, soil_feature_names
 
 # Initial attempt to load at startup
@@ -349,35 +511,35 @@ def soil_health_info():
     model, encoder, feature_names = get_soil_model()
     is_loaded = (model is not None and encoder is not None)
     classes = list(encoder.classes_) if encoder is not None else ["Healthy", "High Stress", "Moderate Stress"]
-    
+    features_used = feature_names if feature_names else PHYSICAL_FEATURES
+
     feature_importances = {}
     if is_loaded and hasattr(model, "feature_importances_") and feature_names:
         importances = model.feature_importances_
         for name, imp in sorted(zip(feature_names, importances), key=lambda x: x[1], reverse=True):
             feature_importances[name] = round(float(imp * 100), 2)
     else:
+        # Default fallback showing 3 physical features
         feature_importances = {
-            "Soil_Moisture": 66.24,
-            "Nitrogen_Level": 17.86,
-            "Soil_pH": 2.09,
-            "Chlorophyll_Content": 1.89,
-            "Soil_Temperature": 1.81,
-            "Electrochemical_Signal": 1.72,
-            "Potassium_Level": 1.72,
-            "Humidity": 1.69,
-            "Light_Intensity": 1.69,
-            "Phosphorus_Level": 1.66,
-            "Ambient_Temperature": 1.61
+            "Soil_Moisture": 60.0,
+            "Ambient_Temperature": 25.0,
+            "Humidity": 15.0
         }
 
     return {
+        "model_loaded": is_loaded,
+        "model_name": "soil_model_3features.pkl",
+        "model_type": "Random Forest Classifier",
+        "features_used": features_used,
+        "classes": classes,
+        "dataset_samples": 1200,
+        "feature_importances": feature_importances,
+        "test_accuracy": soil_model_accuracy,
+        # Legacy fields for frontend compatibility
         "model": "Random Forest Classifier",
         "status": "loaded" if is_loaded else "unloaded",
-        "classes": classes,
-        "accuracy": 100.0,
-        "dataset_samples": 1200,
-        "features_count": len(feature_names) if feature_names else 11,
-        "feature_importances": feature_importances
+        "accuracy": soil_model_accuracy,
+        "features_count": len(features_used)
     }
 
 
@@ -388,79 +550,96 @@ def predict_soil_health(data: SoilPredictionInput):
     if model is None or encoder is None:
         raise HTTPException(
             status_code=500,
-            detail="Soil AI model unavailable"
+            detail="Soil AI model (3-feature) unavailable. Run ai/soil_health/train_model_3features.py first."
         )
 
     try:
         import pandas as pd
         payload = data.dict()
-        input_df = pd.DataFrame([payload])
-        if feature_names is not None:
-            input_df = input_df[feature_names]
-        
+
+        # Use physical sensor features only
+        features = feature_names if feature_names else PHYSICAL_FEATURES
+        input_df = pd.DataFrame([{f: payload[f] for f in features}])
+
         prediction = model.predict(input_df)[0]
         probabilities = model.predict_proba(input_df)[0]
         predicted_label = encoder.inverse_transform([prediction])[0]
-        
+
         prob_dict = {}
         for cls_name, prob in zip(encoder.classes_, probabilities):
             prob_dict[str(cls_name)] = round(float(prob * 100), 2)
-        
+
         main_confidence = round(float(np.max(probabilities) * 100), 2)
         health_status = str(predicted_label)
 
-        # Dynamic prediction explanation ("Why [Status]?")
-        why_explanation = []
+        # Dynamic explanation based on actual physical sensor readings
+        why_explanation = ["Prediction is based on the current soil moisture, ambient temperature and humidity readings."]
+
         moisture = payload.get("Soil_Moisture", 55.0)
-        ph = payload.get("Soil_pH", 6.5)
-        nitrogen = payload.get("Nitrogen_Level", 40.0)
-        soil_temp = payload.get("Soil_Temperature", 26.0)
+        amb_temp = payload.get("Ambient_Temperature", 28.0)
+        humidity = payload.get("Humidity", 60.0)
 
         if moisture < 40:
-            why_explanation.append(f"Soil Moisture ({moisture}%) is severely low (optimal: 60-70%).")
-        elif moisture < 50:
-            why_explanation.append(f"Soil Moisture ({moisture}%) is slightly below optimal range.")
-        elif moisture > 80:
-            why_explanation.append(f"Soil Moisture ({moisture}%) is excessively high (risk of root rot).")
+            why_explanation.append(f"Soil Moisture ({moisture}%) is severely low — optimal range for turmeric is 60-70%.")
+        elif moisture < 55:
+            why_explanation.append(f"Soil Moisture ({moisture}%) is below the optimal range (60-70%).")
+        elif moisture > 85:
+            why_explanation.append(f"Soil Moisture ({moisture}%) is excessively high — risk of root rot.")
         else:
-            why_explanation.append(f"Soil Moisture ({moisture}%) is in the optimal range.")
+            why_explanation.append(f"Soil Moisture ({moisture}%) is in an acceptable range.")
 
-        if ph < 5.5:
-            why_explanation.append(f"Soil pH ({ph}) is acidic (ideal for turmeric: 5.8 - 7.2).")
-        elif ph > 7.5:
-            why_explanation.append(f"Soil pH ({ph}) is alkaline.")
+        if amb_temp > 38:
+            why_explanation.append(f"Ambient Temperature ({amb_temp}°C) is high — turmeric prefers 20-35°C.")
+        elif amb_temp < 15:
+            why_explanation.append(f"Ambient Temperature ({amb_temp}°C) is low — may slow rhizome development.")
         else:
-            why_explanation.append(f"Soil pH ({ph}) is well-balanced.")
+            why_explanation.append(f"Ambient Temperature ({amb_temp}°C) is within turmeric growing range.")
 
-        if nitrogen < 25:
-            why_explanation.append(f"Nitrogen level ({nitrogen} mg/kg) is deficient.")
-        elif nitrogen < 35:
-            why_explanation.append(f"Nitrogen level ({nitrogen} mg/kg) is moderate.")
+        if humidity < 40:
+            why_explanation.append(f"Humidity ({humidity}%) is low — turmeric grows best above 60%.")
+        elif humidity > 90:
+            why_explanation.append(f"Humidity ({humidity}%) is very high — increased disease risk.")
         else:
-            why_explanation.append(f"Nitrogen level ({nitrogen} mg/kg) is sufficient.")
+            why_explanation.append(f"Humidity ({humidity}%) is within an acceptable range.")
 
-        if soil_temp > 35 or soil_temp < 15:
-            why_explanation.append(f"Soil temperature ({soil_temp}°C) is outside normal crop comfort range.")
-
-        # Recommendations based on prediction status
+        # Recommendations based on predicted health status
         if health_status == "Healthy":
             recommendations = [
-                "Maintain current irrigation schedule.",
-                "Continue nutrient monitoring.",
-                "Soil is healthy."
+                "Current measured conditions indicate suitable soil conditions.",
+                "Continue monitoring soil moisture and environmental conditions regularly.",
+                "Maintain current irrigation schedule."
             ]
         elif health_status == "Moderate Stress":
             recommendations = [
-                "Inspect soil moisture and nutrient levels.",
-                "Adjust fertilization and irrigation routine.",
-                "Soil shows moderate stress signs."
+                "Monitor soil moisture closely and check irrigation requirements.",
+                "Inspect environmental temperature and humidity levels.",
+                "Adjust irrigation if soil moisture is outside the 60-70% range."
             ]
         else:
             recommendations = [
-                "Immediate soil intervention required.",
-                "Check for severe moisture deficiency or nutrient imbalance.",
-                "Soil is under high stress."
+                "Immediate soil-condition monitoring is recommended.",
+                "Check irrigation — soil moisture may be severely low or excessively high.",
+                "Verify DHT11 sensor readings and inspect the crop field directly."
             ]
+
+        # Automatically persist soil prediction to MongoDB Atlas soil_predictions collection
+        try:
+            device_id = payload.get("device_id") or "ESP32_001"
+            db.save_soil_prediction(
+                inputs={
+                    "Soil_Moisture": moisture,
+                    "Ambient_Temperature": amb_temp,
+                    "Humidity": humidity
+                },
+                health_status=health_status,
+                confidence=main_confidence,
+                probabilities=prob_dict,
+                recommendation=recommendations,
+                why_explanation=why_explanation,
+                device_id=device_id
+            )
+        except Exception as db_err:
+            print(f"[MongoDB] Error saving soil prediction: {db_err}")
 
         return {
             "health_status": health_status,
@@ -477,6 +656,17 @@ def predict_soil_health(data: SoilPredictionInput):
             status_code=500,
             detail=f"Soil health prediction failed: {str(e)}"
         )
+
+
+@app.get("/api/soil/history")
+def get_soil_prediction_history(device_id: Optional[str] = None, limit: int = 50):
+    """Fetch recent soil health predictions from MongoDB Atlas."""
+    history = db.get_soil_history(device_id=device_id, limit=limit)
+    return {
+        "success": True,
+        "count": len(history),
+        "history": history
+    }
 
 
 @app.get("/{full_path:path}")

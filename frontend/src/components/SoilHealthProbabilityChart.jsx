@@ -4,21 +4,21 @@ export default function SoilHealthProbabilityChart({ probabilities }) {
   const probList = [
     {
       label: 'Healthy',
-      value: probabilities?.['Healthy'] ?? 82.96,
+      value: probabilities?.['Healthy'] ?? null,
       barColor: 'bg-emerald-500',
       textColor: 'text-emerald-600 dark:text-emerald-400',
       badgeBg: 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-200 dark:border-emerald-800'
     },
     {
       label: 'Moderate Stress',
-      value: probabilities?.['Moderate Stress'] ?? 12.07,
+      value: probabilities?.['Moderate Stress'] ?? null,
       barColor: 'bg-amber-500',
       textColor: 'text-amber-600 dark:text-amber-400',
       badgeBg: 'bg-amber-50 dark:bg-amber-950/60 border-amber-200 dark:border-amber-800'
     },
     {
       label: 'High Stress',
-      value: probabilities?.['High Stress'] ?? 4.97,
+      value: probabilities?.['High Stress'] ?? null,
       barColor: 'bg-rose-500',
       textColor: 'text-rose-600 dark:text-rose-400',
       badgeBg: 'bg-rose-50 dark:bg-rose-950/60 border-rose-200 dark:border-rose-800'
@@ -37,13 +37,13 @@ export default function SoilHealthProbabilityChart({ probabilities }) {
               {item.label}
             </span>
             <span className={`font-bold ${item.textColor}`}>
-              {item.value.toFixed(2)}%
+              {item.value == null ? '--' : `${Number(item.value).toFixed(2)}%`}
             </span>
           </div>
           <div className="w-full bg-slate-100 dark:bg-slate-800 h-3 rounded-full overflow-hidden p-0.5 border border-slate-200/60 dark:border-slate-800">
             <div 
               className={`h-full rounded-full transition-all duration-700 ease-out ${item.barColor}`}
-              style={{ width: `${Math.max(item.value, 2)}%` }}
+              style={{ width: `${item.value == null ? 0 : Math.max(item.value, 2)}%` }}
             ></div>
           </div>
         </div>

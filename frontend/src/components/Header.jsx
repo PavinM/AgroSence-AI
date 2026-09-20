@@ -46,7 +46,7 @@ export default function Header({
               </span>
               <Wifi className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 hidden xs:inline" />
               <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-                ESP32 Connected
+                Simulation Mode
               </span>
             </div>
 
