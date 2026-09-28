@@ -3,6 +3,18 @@
 @tailwind utilities;
 
 @layer base {
+  .grid > * {
+    min-width: 0;
+  }
+
+  main h2 {
+    overflow-wrap: anywhere;
+  }
+
+  main h2 svg {
+    flex-shrink: 0;
+  }
+
   body {
     font-family: 'Outfit', 'Inter', sans-serif;
     -webkit-tap-highlight-color: transparent;

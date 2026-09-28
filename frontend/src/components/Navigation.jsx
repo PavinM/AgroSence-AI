@@ -15,7 +15,7 @@ export default function Navigation({ activeTab, setActiveTab }) {
       {/* Desktop Navigation */}
       <nav className="hidden md:block bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 transition-colors">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex space-x-1 sm:space-x-4 py-2">
+          <div className="flex flex-wrap gap-1 lg:gap-4 py-2">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
@@ -63,7 +63,7 @@ export default function Navigation({ activeTab, setActiveTab }) {
                 ) : (
                   <Icon className="w-5 h-5 mb-0.5" />
                 )}
-                <span className="text-[10px] leading-none mt-1 truncate max-w-[64px]">
+                <span className="text-[10px] leading-tight mt-1 text-center">
                   {item.label}
                 </span>
               </button>

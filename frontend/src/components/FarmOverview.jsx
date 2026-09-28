@@ -6,6 +6,11 @@ export default function FarmOverview({ sensors, latestScan, soilPrediction, onNa
   const cropHealthStatus = latestScan ? (latestScan.condition === 'Healthy' ? 'Good' : 'Attention Required') : 'Waiting for analysis';
   const soilStatus = soilPrediction?.health_status || 'Waiting for prediction';
   const soilConfidence = soilPrediction?.confidence;
+  const scanTimestamp = latestScan?.timestamp || latestScan?.analyzedAt;
+  const scanDate = scanTimestamp ? new Date(scanTimestamp) : null;
+  const scanDateLabel = scanDate && !Number.isNaN(scanDate.getTime())
+    ? scanDate.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : 'No analysis yet';
 
   const soilColor = soilStatus === 'Healthy' ? 'text-emerald-600 dark:text-emerald-400' :
                     soilStatus === 'Moderate Stress' ? 'text-amber-600 dark:text-amber-400' :
@@ -29,12 +34,12 @@ export default function FarmOverview({ sensors, latestScan, soilPrediction, onNa
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         
         {/* Card 1: Overall Crop Health */}
-        <div className="glass-card glass-card-hover p-5 rounded-2xl relative overflow-hidden">
-          <div className="flex items-start justify-between">
-            <div>
+        <div className="glass-card glass-card-hover p-5 sm:p-6 rounded-2xl min-w-0 flex flex-col gap-5">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 flex-1">
               <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 1. Overall Crop Health
               </p>
@@ -44,7 +49,7 @@ export default function FarmOverview({ sensors, latestScan, soilPrediction, onNa
                 {cropHealthStatus}
               </h3>
             </div>
-            <div className={`p-3 rounded-xl ${
+            <div className={`p-3 rounded-xl shrink-0 ${
               cropHealthStatus === 'Good' ? 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400' : 'bg-amber-100 dark:bg-amber-950/80 text-amber-600 dark:text-amber-400'
             }`}>
               {cropHealthStatus === 'Good' ? (
@@ -55,13 +60,13 @@ export default function FarmOverview({ sensors, latestScan, soilPrediction, onNa
             </div>
           </div>
 
-          <div className="mt-4 flex items-center justify-between text-xs pt-3 border-t border-slate-100 dark:border-slate-800">
+          <div className="mt-auto flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-xs pt-4 border-t border-slate-100 dark:border-slate-800">
             <span className="text-slate-500 dark:text-slate-400">
               Based on visual AI scans
             </span>
             <button 
               onClick={() => onNavigate('plant-analysis')}
-              className="text-emerald-600 dark:text-emerald-400 font-semibold hover:underline flex items-center space-x-1"
+              className="text-emerald-600 dark:text-emerald-400 font-semibold hover:underline inline-flex shrink-0 items-center gap-1 whitespace-nowrap"
             >
               <span>Scan Leaf</span>
               <ArrowRight className="w-3 h-3" />
@@ -70,9 +75,9 @@ export default function FarmOverview({ sensors, latestScan, soilPrediction, onNa
         </div>
 
         {/* Card 2: Soil Health (Powered by Soil AI Model) */}
-        <div className="glass-card glass-card-hover p-5 rounded-2xl relative overflow-hidden">
-          <div className="flex items-start justify-between">
-            <div>
+        <div className="glass-card glass-card-hover p-5 sm:p-6 rounded-2xl min-w-0 flex flex-col gap-5">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 flex-1">
               <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center space-x-1">
                 <span>🌱 2. Soil Health</span>
               </p>
@@ -83,18 +88,18 @@ export default function FarmOverview({ sensors, latestScan, soilPrediction, onNa
                 Confidence: <strong className={soilColor}>{soilConfidence != null ? `${soilConfidence}%` : '--'}</strong>
               </p>
             </div>
-            <div className={`p-3 rounded-xl ${soilIconBg}`}>
+            <div className={`p-3 rounded-xl shrink-0 ${soilIconBg}`}>
               <Leaf className="w-6 h-6" />
             </div>
           </div>
 
-          <div className="mt-4 flex items-center justify-between text-xs pt-3 border-t border-slate-100 dark:border-slate-800">
+          <div className="mt-auto flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-xs pt-4 border-t border-slate-100 dark:border-slate-800">
             <span className="text-slate-500 dark:text-slate-400">
               AI Prediction Model
             </span>
             <button 
               onClick={() => onNavigate('soil-monitoring')}
-              className="text-emerald-600 dark:text-emerald-400 font-semibold hover:underline flex items-center space-x-1"
+              className="text-emerald-600 dark:text-emerald-400 font-semibold hover:underline inline-flex shrink-0 items-center gap-1 whitespace-nowrap"
             >
               <span>Predict Soil</span>
               <ArrowRight className="w-3 h-3" />
@@ -103,13 +108,13 @@ export default function FarmOverview({ sensors, latestScan, soilPrediction, onNa
         </div>
 
         {/* Card 3: Soil Moisture */}
-        <div className="glass-card glass-card-hover p-5 rounded-2xl relative overflow-hidden">
-          <div className="flex items-start justify-between">
-            <div>
+        <div className="glass-card glass-card-hover p-5 sm:p-6 rounded-2xl min-w-0 flex flex-col gap-5">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 flex-1">
               <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 3. Soil Moisture
               </p>
-              <div className="flex items-baseline space-x-1 mt-1">
+              <div className="flex flex-wrap items-baseline gap-2 mt-2">
                 <h3 className="text-2xl sm:text-3xl font-extrabold text-blue-600 dark:text-blue-400">
                   {sensors?.moisture?.value != null ? `${sensors.moisture.value}%` : '--'}
                 </h3>
@@ -118,7 +123,7 @@ export default function FarmOverview({ sensors, latestScan, soilPrediction, onNa
                 </span>
               </div>
             </div>
-            <div className="p-3 rounded-xl bg-blue-100 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400">
+            <div className="p-3 rounded-xl shrink-0 bg-blue-100 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400">
               <Droplets className="w-6 h-6" />
             </div>
           </div>
@@ -140,7 +145,7 @@ export default function FarmOverview({ sensors, latestScan, soilPrediction, onNa
         </div>
 
         {/* Card 4: Ambient Temperature */}
-        <div className="glass-card glass-card-hover p-5 rounded-2xl relative overflow-hidden">
+        <div className="glass-card glass-card-hover p-5 sm:p-6 rounded-2xl min-w-0 flex flex-col gap-5">
           <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">4. Ambient Temperature</p>
           <div className="flex items-baseline space-x-1 mt-2">
             <h3 className="text-2xl sm:text-3xl font-extrabold text-orange-600 dark:text-orange-400">
@@ -152,7 +157,7 @@ export default function FarmOverview({ sensors, latestScan, soilPrediction, onNa
         </div>
 
         {/* Card 5: Humidity */}
-        <div className="glass-card glass-card-hover p-5 rounded-2xl relative overflow-hidden">
+        <div className="glass-card glass-card-hover p-5 sm:p-6 rounded-2xl min-w-0 flex flex-col gap-5">
           <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">5. Humidity</p>
           <div className="flex items-baseline space-x-1 mt-2">
             <h3 className="text-2xl sm:text-3xl font-extrabold text-teal-600 dark:text-teal-400">
@@ -164,13 +169,13 @@ export default function FarmOverview({ sensors, latestScan, soilPrediction, onNa
         </div>
 
         {/* Card 6: AI Plant Analysis */}
-        <div className="glass-card glass-card-hover p-5 rounded-2xl relative overflow-hidden">
-          <div className="flex items-start justify-between">
-            <div className="flex-1 pr-2">
+        <div className="glass-card glass-card-hover p-5 sm:p-6 rounded-2xl min-w-0 flex flex-col gap-5">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 flex-1">
               <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                4. AI Plant Analysis
+                6. AI Plant Analysis
               </p>
-              <h3 className="text-lg font-bold mt-1 text-slate-900 dark:text-white truncate">
+              <h3 className="text-xl font-bold mt-1 text-slate-900 dark:text-white break-words">
                 {latestScan?.diseaseDetected || 'Waiting for analysis'}
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -186,13 +191,13 @@ export default function FarmOverview({ sensors, latestScan, soilPrediction, onNa
             </div>
           </div>
 
-          <div className="mt-4 flex items-center justify-between text-xs pt-3 border-t border-slate-100 dark:border-slate-800">
+          <div className="mt-auto flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-xs pt-4 border-t border-slate-100 dark:border-slate-800">
             <span className="text-slate-500 dark:text-slate-400">
-              {latestScan?.timestamp || 'No analysis yet'}
+              {scanDateLabel}
             </span>
             <button 
               onClick={() => onNavigate('plant-analysis')}
-              className="text-emerald-600 dark:text-emerald-400 font-semibold hover:underline flex items-center space-x-1"
+              className="text-emerald-600 dark:text-emerald-400 font-semibold hover:underline inline-flex shrink-0 items-center gap-1 whitespace-nowrap"
             >
               <span>Analyze New</span>
               <ArrowRight className="w-3 h-3" />

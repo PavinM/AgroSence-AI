@@ -138,7 +138,7 @@ export default function SoilHealthPrediction({ currentPrediction, sensors, onPre
     <section className="mb-8 space-y-6">
       
       {/* Title Bar */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white flex items-center space-x-2">
             <Sprout className="w-5 h-5 text-emerald-500" />
@@ -152,7 +152,7 @@ export default function SoilHealthPrediction({ currentPrediction, sensors, onPre
 
       {/* 1. Model Information Dashboard Bar */}
       <div className="glass-card rounded-2xl p-4 border border-slate-200 dark:border-slate-800 shadow-md">
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 divide-y sm:divide-y-0 sm:divide-x divide-slate-200 dark:divide-slate-800">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
           
           <div className="flex items-center space-x-3">
             <div className="p-2.5 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 shrink-0">
@@ -160,7 +160,7 @@ export default function SoilHealthPrediction({ currentPrediction, sensors, onPre
             </div>
             <div>
               <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">AI Model</p>
-              <p className="text-xs sm:text-sm font-black text-slate-900 dark:text-white truncate">
+              <p className="text-xs sm:text-sm font-black text-slate-900 dark:text-white break-words">
                 {modelInfo.model || 'Random Forest'}
               </p>
             </div>
@@ -257,7 +257,7 @@ export default function SoilHealthPrediction({ currentPrediction, sensors, onPre
 
             {/* Confidence Score Gauge Visualizer */}
             <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 space-y-2">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold flex items-center space-x-1.5">
                   <Gauge className="w-4 h-4 text-emerald-500" />
                   <span>Model Confidence Score</span>
@@ -327,7 +327,7 @@ export default function SoilHealthPrediction({ currentPrediction, sensors, onPre
           
           {/* Sensor Input Parameters Form */}
           <div className="glass-card rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-xl">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
               <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center space-x-2">
                 <Sliders className="w-4 h-4 text-emerald-500" />
                 <span>Sensor Input Telemetry (Manual / ESP32)</span>
@@ -338,10 +338,10 @@ export default function SoilHealthPrediction({ currentPrediction, sensors, onPre
             </div>
 
             <form onSubmit={handlePredict} className="space-y-4">
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {sensorFields.map((field) => (
                   <div key={field.key} className="space-y-1">
-                    <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 truncate block" title={field.label}>
+                    <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 block" title={field.label}>
                       {field.label} ({field.unit})
                     </label>
                     <input
@@ -384,7 +384,7 @@ export default function SoilHealthPrediction({ currentPrediction, sensors, onPre
 
           {/* Feature Importance Chart */}
           <div className="glass-card rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-xl space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center space-x-2">
                 <BarChart3 className="w-4 h-4 text-emerald-500" />
                 <span>Feature Importance Weights (Model Decision Factors)</span>

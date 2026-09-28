@@ -168,7 +168,7 @@ export default function SoilMonitoring({ sensors, onRefreshSensors }) {
       </div>
 
       {/* CURRENT READINGS CARDS */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {sensorList.map((item) => {
           const Icon = item.icon;
           const hasValue = Number.isFinite(item.value);
@@ -177,7 +177,7 @@ export default function SoilMonitoring({ sensors, onRefreshSensors }) {
           return (
             <div key={item.id} className="glass-card glass-card-hover p-5 rounded-2xl flex flex-col justify-between">
               <div>
-                <div className="flex items-center justify-between mb-3">
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
                   <div className="flex items-center space-x-3">
                     <div className={`p-2.5 rounded-xl ${item.iconBg}`}>
                       <Icon className="w-5 h-5" />
@@ -220,12 +220,12 @@ export default function SoilMonitoring({ sensors, onRefreshSensors }) {
                 </p>
               </div>
 
-              <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
+              <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
                 <span className="flex items-center space-x-1">
                   <Clock className="w-3 h-3 text-slate-400" />
                   <span>Updated: {item.lastUpdated}</span>
                 </span>
-                <span className="text-emerald-600 dark:text-emerald-400 font-medium truncate max-w-[140px]" title={item.source}>
+                <span className="text-emerald-600 dark:text-emerald-400 font-medium break-words" title={item.source}>
                   {item.source}
                 </span>
               </div>
@@ -236,13 +236,13 @@ export default function SoilMonitoring({ sensors, onRefreshSensors }) {
 
       {/* SENSOR HISTORY TABLE (MongoDB Atlas Persistent Telemetry) */}
       <div className="glass-card rounded-2xl p-5 border border-slate-200 dark:border-slate-800">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800 gap-3">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800 gap-3">
           <div className="flex items-center space-x-2">
             <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600">
               <TableIcon className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center space-x-2">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex flex-wrap items-center gap-2">
                 <span>Sensor History Table</span>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950 text-emerald-600 border border-emerald-200 dark:border-emerald-800 flex items-center space-x-1">
                   <Database className="w-2.5 h-2.5" />
@@ -256,7 +256,7 @@ export default function SoilMonitoring({ sensors, onRefreshSensors }) {
           </div>
 
           {/* Table Controls: Limit & Sort & Refresh */}
-          <div className="flex items-center space-x-2 shrink-0">
+          <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center space-x-1 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300">
               <span className="text-slate-400 text-[11px]">Rows:</span>
               {[20, 50, 100].map((num) => (

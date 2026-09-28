@@ -67,6 +67,7 @@ export default function App() {
       ]);
 
       setSoilHistory(persistedSoil);
+      setSoilPrediction(persistedSoil[0] || null);
       setScanHistory(persistedPlants);
       if (persistedPlants.length > 0) {
         const top = persistedPlants[0];

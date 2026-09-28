@@ -65,7 +65,7 @@ export default function SystemStatus({ telemetry }) {
 
   return (
     <section className="mb-8">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
         <div>
           <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white flex items-center space-x-2">
             <Server className="w-5 h-5 text-emerald-500" />
@@ -88,8 +88,8 @@ export default function SystemStatus({ telemetry }) {
                 <Icon className="w-6 h-6" />
               </div>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white break-words">
                     {node.label}
                   </h3>
                   <div className="flex items-center space-x-1.5 shrink-0 ml-2">
@@ -102,7 +102,7 @@ export default function SystemStatus({ telemetry }) {
                     </span>
                   </div>
                 </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 truncate">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 break-words">
                   {node.metric}
                 </p>
                 <div className="mt-3 flex items-center space-x-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">
