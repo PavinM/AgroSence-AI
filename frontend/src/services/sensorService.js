@@ -7,9 +7,7 @@
  *   - DHT11                -> temperature, humidity
  */
 
-const API_BASE_URL = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-  ? (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000')
-  : (import.meta.env.VITE_API_BASE_URL || '');
+import { API_BASE_URL } from './apiConfig';
 
 async function request(path, options) {
   const response = await fetch(`${API_BASE_URL}${path}`, options);
@@ -51,9 +49,9 @@ export function getSensorStatus(value, minOpt, maxOpt) {
  * Fetch current real-time sensor metrics.
  * Connects to MongoDB Atlas via FastAPI GET /api/sensors/latest with fallback.
  */
-export async function getRealtimeSensors() {
+export async function getRealtimeSensors(reading) {
   try {
-    const latest = await getLatestSensorReading();
+    const latest = reading === undefined ? await getLatestSensorReading() : reading;
     if (latest && latest.soil_moisture !== undefined) {
       const timeStr = latest.timestamp
         ? new Date(latest.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
@@ -172,4 +170,19 @@ export async function getSystemStatus() {
       rate: '100% OK'
     }
   };
+}
+
+/** One live stream per dashboard; EventSource reconnects after network failures. */
+export function subscribeToSync(onUpdate) {
+  if (typeof EventSource === 'undefined') return () => {};
+  const source = new EventSource(`${API_BASE_URL}/api/sync/stream`);
+  source.addEventListener('sync', (event) => {
+    try {
+      onUpdate(JSON.parse(event.data));
+      window.dispatchEvent(new Event('agrosense:sync'));
+    } catch (error) {
+      console.warn('[SensorService] Invalid sync event:', error.message);
+    }
+  });
+  return () => source.close();
 }

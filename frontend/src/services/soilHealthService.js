@@ -7,9 +7,7 @@
  *   - DHT11 → Ambient_Temperature, Humidity
  */
 
-const API_BASE_URL = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-  ? (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000')
-  : (import.meta.env.VITE_API_BASE_URL || '');
+import { API_BASE_URL } from './apiConfig';
 
 /** Only the 3 physical sensor values available from the ESP32 prototype. */
 export const DEFAULT_SOIL_INPUTS = {

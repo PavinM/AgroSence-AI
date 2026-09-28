@@ -44,12 +44,16 @@ export default function SensorCharts() {
   useEffect(() => {
     fetchChartHistory();
 
-    // Auto-update charts every 30 seconds as specified
+    // Periodic fallback alongside live stream notifications
     const interval = setInterval(() => {
       fetchChartHistory();
     }, 30000);
 
-    return () => clearInterval(interval);
+    window.addEventListener('agrosense:sync', fetchChartHistory);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('agrosense:sync', fetchChartHistory);
+    };
   }, []);
 
   const CustomTooltip = ({ active, payload, label }) => {

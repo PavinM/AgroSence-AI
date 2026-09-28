@@ -13,7 +13,8 @@ import SoilHealthHistory from './components/SoilHealthHistory';
 
 import { 
   getRealtimeSensors, 
-  getSystemStatus 
+  getSystemStatus,
+  subscribeToSync
 } from './services/sensorService';
 
 import { getSoilHealthHistory } from './services/soilHealthService';
@@ -86,7 +87,7 @@ export default function App() {
     }
   }, []);
 
-  // Poll current live sensors (every 10s as required)
+  // Periodic refresh also provides a fallback when streaming is unavailable.
   const pollLiveSensors = useCallback(async () => {
     const data = await getRealtimeSensors();
     const system = await getSystemStatus();
@@ -121,6 +122,23 @@ export default function App() {
       clearInterval(historyInterval);
     };
   }, [pollLiveSensors, fetchDbHistories]);
+
+  useEffect(() => {
+    let active = true;
+    const unsubscribe = subscribeToSync(async (snapshot) => {
+      const data = await getRealtimeSensors(snapshot.reading);
+      if (!active) return;
+      setSensors(data);
+      if (snapshot.reading?.timestamp) {
+        setLastUpdated(new Date(snapshot.reading.timestamp).toLocaleTimeString());
+      }
+      fetchDbHistories();
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [fetchDbHistories]);
 
   // When user completes a new AI plant scan
   const handleNewAnalysis = (newResult) => {

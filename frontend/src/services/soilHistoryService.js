@@ -9,9 +9,7 @@
  * 5. saveSensorReading()         -> POST /api/sensors/readings
  */
 
-const API_BASE_URL = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-  ? (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000')
-  : (import.meta.env.VITE_API_BASE_URL || '');
+import { API_BASE_URL } from './apiConfig';
 
 /**
  * Fetch the newest real-time sensor reading from MongoDB Atlas via FastAPI.

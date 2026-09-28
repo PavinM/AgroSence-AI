@@ -40,7 +40,11 @@ export default function SoilMonitoring({ sensors, onRefreshSensors }) {
   useEffect(() => {
     fetchTableData();
     const interval = setInterval(fetchTableData, 30000);
-    return () => clearInterval(interval);
+    window.addEventListener('agrosense:sync', fetchTableData);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('agrosense:sync', fetchTableData);
+    };
   }, [limit]);
 
   const handleManualRefresh = async () => {
@@ -149,7 +153,7 @@ export default function SoilMonitoring({ sensors, onRefreshSensors }) {
             <span>Section 2 — Live ESP32 Sensor Monitoring</span>
           </h2>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-            Current real-time readings from ESP32 Dev Board + Soil Moisture + DHT11 (polled every 10s)
+            Current real-time readings from ESP32 Dev Board + Soil Moisture + DHT11 (updates automatically)
           </p>
         </div>
 

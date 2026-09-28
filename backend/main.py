@@ -6,9 +6,9 @@ import numpy as np
 import onnxruntime as ort
 
 from PIL import Image
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 
@@ -414,6 +414,25 @@ def post_sensor_reading(data: SensorReadingInput):
     }
 
 
+def read_sync_snapshot():
+    """Read shared MongoDB state, including writes from other app instances."""
+    return {
+        "reading": db.get_latest_sensor_reading(),
+        "soil": db.get_soil_history(limit=1),
+        "plants": db.get_plant_history(limit=1),
+    }
+
+
+@app.get("/api/sync/stream")
+async def sync_stream(request: Request):
+    from backend.realtime import stream_updates
+    return StreamingResponse(
+        stream_updates(request, read_sync_snapshot),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 @app.get("/api/sensors/latest")
 def get_latest_sensor(device_id: Optional[str] = None):
     """Fetch the newest sensor reading from MongoDB Atlas."""
@@ -695,4 +714,4 @@ if __name__ == "__main__":
     uvicorn.run("main:app", host=host, port=port, reload=False)
 
 
-
+
